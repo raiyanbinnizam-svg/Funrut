@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FaceSmash</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <h1 class="logo">Face<span>Smash</span></h1>
+    <nav>
+      <button class="tab active" data-view="vote">Vote</button>
+      <button class="tab" data-view="board">Rankings</button>
+      <button class="tab" data-view="join">Join</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="view-vote" class="view active">
+      <p class="prompt">Who wins this round? <span class="hint">Click, or use ← →</span></p>
+      <div class="arena">
+        <button class="card" id="left" aria-label="Pick left"></button>
+        <div class="or">OR</div>
+        <button class="card" id="right" aria-label="Pick right"></button>
+      </div>
+      <p class="result" id="result" aria-live="polite"></p>
+    </section>
+
+    <section id="view-board" class="view">
+      <p class="prompt">Rankings <span class="hint" id="vote-count"></span></p>
+      <ol class="board" id="board"></ol>
+    </section>
+
+    <section id="view-join" class="view">
+      <p class="prompt">Add yourself to the arena</p>
+      <form id="join-form" class="join">
+        <label class="drop" id="drop">
+          <input type="file" id="file" accept="image/png,image/jpeg,image/webp,image/gif" required>
+          <img id="preview" alt="" hidden>
+          <span id="drop-text">Choose a photo (max 2 MB)</span>
+        </label>
+        <label>Name
+          <input type="text" id="name" maxlength="40" required placeholder="What should we call you?">
+        </label>
+        <label class="consent">
+          <input type="checkbox" id="consent" required>
+          <span>This is a photo of me, or I have the pictured person's permission to add it.</span>
+        </label>
+        <button type="submit" class="primary">Enter the arena</button>
+        <p class="form-msg" id="form-msg" aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

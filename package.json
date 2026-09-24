@@ -1,0 +1,14 @@
+{
+  "name": "facesmash",
+  "version": "1.0.0",
+  "description": "Pairwise voting with Elo rankings — pick one of two, watch the leaderboard move.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
