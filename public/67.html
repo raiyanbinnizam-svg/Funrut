@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>67 · Truth or Dare</title>
+<style>
+  :root {
+    --bg: #14101f;
+    --panel: #1f1930;
+    --panel-2: #2a2340;
+    --text: #f4f1ff;
+    --muted: #a79fc4;
+    --truth: #2ec4b6;
+    --truth-dark: #1f9b90;
+    --dare: #ff3d7f;
+    --dare-dark: #d12a63;
+    --gold: #ffd166;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(circle at 50% 0%, #2b1f4d 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header { text-align: center; padding: 24px 16px 8px; }
+  header h1 {
+    margin: 0;
+    font-size: clamp(2.4rem, 8vw, 3.6rem);
+    letter-spacing: 2px;
+    background: linear-gradient(90deg, var(--truth), var(--gold), var(--dare));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  header p { margin: 4px 0 0; color: var(--muted); }
+
+  main {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 820px) { main { grid-template-columns: minmax(0, 1fr); } }
+
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .turn {
+    font-size: 1.15rem;
+    min-height: 1.6em;
+    text-align: center;
+  }
+  .turn strong { color: var(--gold); }
+
+  .wheel-wrap {
+    position: relative;
+    width: min(460px, calc(100% - 28px));
+    aspect-ratio: 1;
+  }
+  .pointer {
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 18px solid transparent;
+    border-right: 18px solid transparent;
+    border-top: 34px solid var(--gold);
+    filter: drop-shadow(0 3px 4px rgba(0,0,0,.5));
+    z-index: 3;
+  }
+  #wheel {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    box-shadow: 0 0 0 8px var(--panel-2), 0 0 0 12px var(--gold), 0 20px 50px rgba(0,0,0,.6);
+    transition: transform 4.5s cubic-bezier(.12,.72,.12,1);
+    will-change: transform;
+  }
+  .hub {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 28%;
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 6px solid var(--gold);
+    background: radial-gradient(circle at 35% 30%, #3b2f63, #140f24 75%);
+    color: var(--gold);
+    font-size: clamp(2rem, 9vw, 3.4rem);
+    font-weight: 900;
+    letter-spacing: 1px;
+    cursor: pointer;
+    z-index: 2;
+    box-shadow: 0 6px 20px rgba(0,0,0,.6), inset 0 0 18px rgba(255,209,102,.25);
+    transition: transform .15s ease;
+    font-family: inherit;
+  }
+  .hub:hover:not(:disabled) { transform: translate(-50%, -50%) scale(1.05); }
+  .hub:disabled { cursor: wait; }
+  .hub:focus-visible { outline: 3px solid var(--text); outline-offset: 4px; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  button.btn {
+    border: 0;
+    border-radius: 999px;
+    padding: 12px 22px;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    color: #fff;
+    background: var(--panel-2);
+    transition: transform .1s ease, filter .1s ease;
+  }
+  button.btn:hover:not(:disabled) { filter: brightness(1.15); }
+  button.btn:active:not(:disabled) { transform: scale(.97); }
+  button.btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.spin { background: linear-gradient(90deg, var(--truth), var(--dare)); font-size: 1.1rem; padding: 14px 34px; }
+  .btn.truth { background: var(--truth-dark); }
+  .btn.dare { background: var(--dare-dark); }
+  .btn.small { padding: 8px 14px; font-size: .9rem; }
+
+  .mode { display: flex; gap: 6px; background: var(--panel); padding: 4px; border-radius: 999px; }
+  .mode label { cursor: pointer; }
+  .mode input { position: absolute; opacity: 0; pointer-events: none; }
+  .mode span { display: block; padding: 6px 14px; border-radius: 999px; color: var(--muted); font-weight: 600; }
+  .mode input:checked + span { background: var(--gold); color: #1a1426; }
+  .mode input:focus-visible + span { outline: 2px solid var(--text); }
+
+  aside { display: flex; flex-direction: column; gap: 16px; }
+  .card {
+    background: var(--panel);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.3);
+  }
+  .card h2 { margin: 0 0 12px; font-size: 1.05rem; display: flex; justify-content: space-between; align-items: center; }
+  form.row { display: flex; gap: 8px; }
+  input[type=text], select {
+    flex: 1;
+    min-width: 0;
+    background: var(--panel-2);
+    border: 1px solid transparent;
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 10px;
+    font: inherit;
+  }
+  input[type=text]:focus, select:focus { outline: none; border-color: var(--gold); }
+
+  ul.players { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 6px; }
+  ul.players li {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 10px;
+    background: var(--panel-2);
+    border-radius: 10px;
+    border: 2px solid transparent;
+  }
+  ul.players li.active { border-color: var(--gold); }
+  ul.players .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  ul.players .score { font-weight: 800; color: var(--gold); }
+  ul.players .remove {
+    background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 1.1rem; padding: 0 4px;
+  }
+  ul.players .remove:hover { color: var(--dare); }
+  .empty { color: var(--muted); font-size: .9rem; margin: 10px 0 0; }
+  .hint { color: var(--muted); font-size: .85rem; margin: 8px 0 0; }
+  .custom-form { display: flex; flex-direction: column; gap: 8px; }
+  .custom-form .row2 { display: flex; gap: 8px; }
+  .custom-form select { flex: 0 0 auto; }
+
+  .history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow: auto; font-size: .9rem; }
+  .history li { padding: 6px 8px; border-radius: 8px; background: var(--panel-2); }
+  .tag { font-weight: 800; font-size: .75rem; padding: 2px 6px; border-radius: 6px; margin-right: 6px; }
+  .tag.truth { background: var(--truth-dark); }
+  .tag.dare { background: var(--dare-dark); }
+  .ok { color: var(--truth); }
+  .no { color: var(--dare); }
+
+  /* result modal */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(8, 5, 16, .75);
+    display: grid; place-items: center;
+    padding: 16px;
+    z-index: 10;
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s ease;
+  }
+  .overlay.open { opacity: 1; pointer-events: auto; }
+  .modal {
+    width: min(480px, 100%);
+    background: var(--panel);
+    border-radius: 22px;
+    padding: 28px 22px 22px;
+    text-align: center;
+    border-top: 8px solid var(--truth);
+    transform: scale(.9);
+    transition: transform .25s cubic-bezier(.2,1.4,.4,1);
+  }
+  .overlay.open .modal { transform: scale(1); }
+  .modal.dare { border-top-color: var(--dare); }
+  .modal .kind { font-size: 2.2rem; font-weight: 900; margin: 0; letter-spacing: 2px; }
+  .modal.truth .kind { color: var(--truth); }
+  .modal.dare .kind { color: var(--dare); }
+  .modal .who { color: var(--muted); margin: 4px 0 16px; }
+  .modal .prompt { font-size: 1.3rem; line-height: 1.4; margin: 0 0 22px; min-height: 3em; }
+  .modal .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .modal .btn.done { background: #1f9b58; }
+  .modal .btn.chicken { background: #7a2d42; }
+</style>
+</head>
+<body>
+<header>
+  <h1>67</h1>
+  <p>Truth or Dare · spin the wheel</p>
+</header>
+
+<main>
+  <section class="stage">
+    <div class="turn" id="turn" aria-live="polite"></div>
+
+    <div class="wheel-wrap">
+      <div class="pointer" aria-hidden="true"></div>
+      <canvas id="wheel" width="920" height="920" aria-label="Truth or Dare wheel"></canvas>
+      <button class="hub" id="hub" type="button" title="Spin the wheel">67</button>
+    </div>
+
+    <div class="controls">
+      <button class="btn spin" id="spin" type="button">Spin</button>
+      <button class="btn truth" id="pickTruth" type="button">Just Truth</button>
+      <button class="btn dare" id="pickDare" type="button">Just Dare</button>
+    </div>
+
+    <div class="mode" role="radiogroup" aria-label="Intensity">
+      <label><input type="radio" name="level" value="mild" checked><span>Mild</span></label>
+      <label><input type="radio" name="level" value="spicy"><span>Spicy</span></label>
+      <label><input type="radio" name="level" value="all"><span>Mixed</span></label>
+    </div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <h2>Players <button class="btn small" id="resetScores" type="button">Reset scores</button></h2>
+      <form class="row" id="playerForm">
+        <input type="text" id="playerName" placeholder="Add a player" maxlength="24" autocomplete="off">
+        <button class="btn small" type="submit">Add</button>
+      </form>
+      <ul class="players" id="players"></ul>
+      <p class="empty" id="noPlayers">No players yet — add some, or just spin.</p>
+      <p class="hint">+1 point for completing a truth, +2 for a dare. Chicken out and you lose 1.</p>
+    </div>
+
+    <div class="card">
+      <h2>Add your own</h2>
+      <form class="custom-form" id="customForm">
+        <input type="text" id="customText" placeholder="Write a truth or dare…" maxlength="160" autocomplete="off">
+        <div class="row2">
+          <select id="customKind" aria-label="Type">
+            <option value="truth">Truth</option>
+            <option value="dare">Dare</option>
+          </select>
+          <button class="btn small" type="submit">Add</button>
+        </div>
+      </form>
+      <p class="hint" id="customCount"></p>
+    </div>
+
+    <div class="card">
+      <h2>History <button class="btn small" id="clearHistory" type="button">Clear</button></h2>
+      <ul class="history" id="history"></ul>
+    </div>
+  </aside>
+</main>
+
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="resultKind">
+  <div class="modal" id="modal">
+    <p class="kind" id="resultKind">TRUTH</p>
+    <p class="who" id="resultWho"></p>
+    <p class="prompt" id="resultPrompt"></p>
+    <div class="actions">
+      <button class="btn done" id="done" type="button">Done ✓</button>
+      <button class="btn" id="another" type="button">Another one</button>
+      <button class="btn chicken" id="chicken" type="button">Chicken out</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ---------- question bank ----------
+  const BANK = {
+    truth: {
+      mild: [
+        'What is the most embarrassing thing you have ever said to a teacher?',
+        'What is your weirdest habit?',
+        'Who in this room would you swap lives with for a day?',
+        'What is the silliest thing you have cried about?',
+        'What is the last lie you told?',
+        'What is your most-played song right now?',
+        'Have you ever pretended to be sick to skip something?',
+        'What is a food you secretly hate but eat anyway?',
+        'What is the most childish thing you still do?',
+        'What was your most awkward moment this year?',
+        'If you could be invisible for a day, what would you do?',
+        'What is the worst gift you have ever received?',
+        'What is one thing you have never told your parents?',
+        'What app do you spend way too much time on?',
+        'Who was your first celebrity crush?',
+        'What is the most useless talent you have?',
+      ],
+      spicy: [
+        'Who here would you most like to go on a date with?',
+        'What is the most embarrassing thing in your search history?',
+        'Have you ever had a crush on a friend\'s partner?',
+        'What is the biggest secret you have kept from your best friend?',
+        'Read out the last message you sent.',
+        'What is something you have done that you hope nobody finds out about?',
+        'Who was the last person you stalked on social media?',
+        'What is the pettiest reason you stopped talking to someone?',
+        'Rate everyone in the room from 1 to 10 — be honest.',
+        'What is your biggest regret so far?',
+        'What is the worst thing you have ever said about someone behind their back?',
+        'Have you ever ghosted someone? Why?',
+      ],
+    },
+    dare: {
+      mild: [
+        'Do your best impression of someone in the room.',
+        'Talk in an accent for the next three rounds.',
+        'Do 15 jumping jacks while shouting "67!"',
+        'Sing the chorus of the last song you listened to.',
+        'Let the group choose a new profile picture for you (for one hour).',
+        'Speak only in questions until your next turn.',
+        'Do your best dance move for 20 seconds.',
+        'Balance a spoon on your nose for 10 seconds.',
+        'Say the alphabet backwards as fast as you can.',
+        'Make up a rap about the person to your left.',
+        'Act like a chicken until someone laughs.',
+        'Hold a plank for 30 seconds.',
+        'Tell a joke — if nobody laughs, do it again.',
+        'Do the "67" hand move for 10 seconds straight.',
+        'Draw a self-portrait with your eyes closed.',
+        'Walk like a runway model across the room.',
+      ],
+      spicy: [
+        'Let the person to your right send a text from your phone (they choose who).',
+        'Post a silly selfie to your story right now.',
+        'Show the group the last photo in your camera roll.',
+        'Call a friend and sing them "Happy Birthday".',
+        'Let someone go through your phone for 30 seconds.',
+        'Send "I know what you did" to the 5th person in your chats.',
+        'Let the group write a status for you to post.',
+        'Eat a spoonful of a condiment the group picks.',
+        'Swap an item of clothing with the person next to you.',
+        'Do your most dramatic fake cry for 20 seconds.',
+        'Text your crush a single emoji the group chooses.',
+        'Let everyone draw on your hand with a pen.',
+      ],
+    },
+  };
+
+  const SEGMENTS = ['truth', 'dare', 'truth', 'dare', 'truth', 'dare', 'truth', 'dare', 'truth', 'dare'];
+  const SEG_DEG = 360 / SEGMENTS.length;
+  const SPIN_MS = 4500;
+  const POINTS = { truth: 1, dare: 2 };
+
+  // ---------- storage (best effort) ----------
+  const STORE_KEY = 'truth-dare-67';
+  function load() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; }
+  }
+  function save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ players, turn, custom, history, level: currentLevel() }));
+    } catch { /* storage unavailable: game still works for this session */ }
+  }
+
+  const saved = load();
+  let players = Array.isArray(saved.players) ? saved.players : [];
+  let turn = Number.isInteger(saved.turn) ? saved.turn : 0;
+  let custom = saved.custom && typeof saved.custom === 'object' ? saved.custom : { truth: [], dare: [] };
+  let history = Array.isArray(saved.history) ? saved.history : [];
+  custom.truth = Array.isArray(custom.truth) ? custom.truth : [];
+  custom.dare = Array.isArray(custom.dare) ? custom.dare : [];
+  if (turn >= players.length) turn = 0;
+
+  // ---------- elements ----------
+  const $ = (id) => document.getElementById(id);
+  const canvas = $('wheel');
+  const ctx = canvas.getContext('2d');
+  const hub = $('hub');
+  const spinBtn = $('spin');
+  const pickTruthBtn = $('pickTruth');
+  const pickDareBtn = $('pickDare');
+  const overlay = $('overlay');
+  const modal = $('modal');
+  const levelInputs = document.querySelectorAll('input[name=level]');
+
+  if (saved.level) {
+    levelInputs.forEach((i) => { i.checked = i.value === saved.level; });
+  }
+  function currentLevel() {
+    const checked = document.querySelector('input[name=level]:checked');
+    return checked ? checked.value : 'mild';
+  }
+
+  // ---------- wheel drawing ----------
+  function drawWheel() {
+    const size = canvas.width;
+    const c = size / 2;
+    const r = c - 4;
+    ctx.clearRect(0, 0, size, size);
+
+    SEGMENTS.forEach((kind, i) => {
+      // Segment 0 starts at the top (under the pointer) and runs clockwise.
+      const start = -Math.PI / 2 + (i * SEG_DEG * Math.PI) / 180;
+      const end = start + (SEG_DEG * Math.PI) / 180;
+
+      const grad = ctx.createRadialGradient(c, c, r * 0.2, c, c, r);
+      if (kind === 'truth') { grad.addColorStop(0, '#5fe0d4'); grad.addColorStop(1, '#1f9b90'); }
+      else { grad.addColorStop(0, '#ff7aa8'); grad.addColorStop(1, '#c4215a'); }
+
+      ctx.beginPath();
+      ctx.moveTo(c, c);
+      ctx.arc(c, c, r, start, end);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = '#ffd166';
+      ctx.stroke();
+
+      // Label, reading outward from the centre.
+      ctx.save();
+      ctx.translate(c, c);
+      ctx.rotate((start + end) / 2);
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#fff';
+      ctx.font = `900 ${Math.round(size * 0.055)}px system-ui, sans-serif`;
+      ctx.shadowColor = 'rgba(0,0,0,.35)';
+      ctx.shadowBlur = 6;
+      ctx.fillText(kind.toUpperCase(), r - size * 0.05, 0);
+      ctx.restore();
+    });
+
+    // Rim studs.
+    for (let i = 0; i < SEGMENTS.length; i++) {
+      const a = -Math.PI / 2 + (i * SEG_DEG * Math.PI) / 180;
+      ctx.beginPath();
+      ctx.arc(c + Math.cos(a) * (r - 14), c + Math.sin(a) * (r - 14), 9, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff4d6';
+      ctx.fill();
+    }
+  }
+
+  // ---------- spinning ----------
+  let rotation = 0;
+  let spinning = false;
+
+  function setBusy(busy) {
+    spinning = busy;
+    hub.disabled = busy;
+    spinBtn.disabled = busy;
+    pickTruthBtn.disabled = busy;
+    pickDareBtn.disabled = busy;
+  }
+
+  function spin() {
+    if (spinning) return;
+    setBusy(true);
+
+    const index = Math.floor(Math.random() * SEGMENTS.length);
+    // Land somewhere inside the segment, away from its edges.
+    const jitter = (Math.random() - 0.5) * SEG_DEG * 0.7;
+    // Rotating the wheel clockwise by X puts the wheel angle -X under the pointer,
+    // so to show the centre of segment `index` we need X ≡ -(index + 0.5) * SEG_DEG.
+    const targetMod = (360 - ((index + 0.5) * SEG_DEG + jitter) % 360 + 360) % 360;
+    const currentMod = ((rotation % 360) + 360) % 360;
+    const extraSpins = 5 + Math.floor(Math.random() * 3);
+    rotation += extraSpins * 360 + ((targetMod - currentMod + 360) % 360);
+
+    canvas.style.transform = `rotate(${rotation}deg)`;
+    tick(SPIN_MS);
+
+    setTimeout(() => {
+      setBusy(false);
+      showResult(SEGMENTS[index]);
+    }, SPIN_MS + 80);
+  }
+
+  // Light "clicking" sound while the wheel spins (skipped if audio is unavailable).
+  let audio;
+  function tick(duration) {
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    } catch { return; }
+    const clicks = 28;
+    for (let i = 0; i < clicks; i++) {
+      // Clicks get further apart as the wheel slows.
+      const t = duration / 1000 * Math.pow(i / clicks, 2.2);
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.frequency.value = 900;
+      gain.gain.setValueAtTime(0.06, audio.currentTime + t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + t + 0.04);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(audio.currentTime + t);
+      osc.stop(audio.currentTime + t + 0.05);
+    }
+  }
+
+  // ---------- questions ----------
+  const lastShown = { truth: null, dare: null };
+  function pool(kind) {
+    const level = currentLevel();
+    const base = level === 'all'
+      ? [...BANK[kind].mild, ...BANK[kind].spicy]
+      : BANK[kind][level];
+    return [...base, ...custom[kind]];
+  }
+  function randomPrompt(kind) {
+    const list = pool(kind);
+    if (list.length === 1) return list[0];
+    let p;
+    do { p = list[Math.floor(Math.random() * list.length)]; } while (p === lastShown[kind]);
+    lastShown[kind] = p;
+    return p;
+  }
+
+  // ---------- result modal ----------
+  let current = null; // { kind, prompt }
+
+  function showResult(kind) {
+    current = { kind, prompt: randomPrompt(kind) };
+    modal.className = `modal ${kind}`;
+    $('resultKind').textContent = kind.toUpperCase();
+    const player = players[turn];
+    $('resultWho').textContent = player ? `${player.name}, it's on you` : 'Whoever spun it, it\'s on you';
+    $('resultPrompt').textContent = current.prompt;
+    overlay.classList.add('open');
+    $('done').focus();
+  }
+
+  function closeResult(outcome) {
+    overlay.classList.remove('open');
+    if (!current) return;
+    if (outcome === 'skip') { current = null; spinBtn.focus(); return; }
+    const player = players[turn];
+    if (player) {
+      if (outcome === 'done') player.score += POINTS[current.kind];
+      if (outcome === 'chicken') player.score -= 1;
+    }
+    history.unshift({
+      who: player ? player.name : '—',
+      kind: current.kind,
+      prompt: current.prompt,
+      outcome,
+    });
+    history = history.slice(0, 30);
+    current = null;
+    if (players.length) turn = (turn + 1) % players.length;
+    save();
+    render();
+    spinBtn.focus();
+  }
+
+  $('done').addEventListener('click', () => closeResult('done'));
+  $('chicken').addEventListener('click', () => closeResult('chicken'));
+  $('another').addEventListener('click', () => {
+    if (!current) return;
+    current.prompt = randomPrompt(current.kind);
+    $('resultPrompt').textContent = current.prompt;
+  });
+  document.addEventListener('keydown', (e) => {
+    if (overlay.classList.contains('open')) {
+      if (e.key === 'Escape') closeResult('skip');
+      return;
+    }
+    if (e.code === 'Space' && !['INPUT', 'SELECT', 'BUTTON'].includes(document.activeElement.tagName)) {
+      e.preventDefault();
+      spin();
+    }
+  });
+
+  // ---------- players ----------
+  function render() {
+    const list = $('players');
+    list.innerHTML = '';
+    players.forEach((p, i) => {
+      const li = document.createElement('li');
+      if (i === turn) li.classList.add('active');
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = p.name;
+      const score = document.createElement('span');
+      score.className = 'score';
+      score.textContent = p.score;
+      const remove = document.createElement('button');
+      remove.className = 'remove';
+      remove.type = 'button';
+      remove.title = `Remove ${p.name}`;
+      remove.setAttribute('aria-label', `Remove ${p.name}`);
+      remove.textContent = '✕';
+      remove.addEventListener('click', () => removePlayer(i));
+      li.append(name, score, remove);
+      list.append(li);
+    });
+    $('noPlayers').hidden = players.length > 0;
+
+    const player = players[turn];
+    $('turn').innerHTML = '';
+    if (player) {
+      const strong = document.createElement('strong');
+      strong.textContent = player.name;
+      $('turn').append(strong, document.createTextNode("'s turn — spin the 67!"));
+    } else {
+      $('turn').textContent = 'Tap 67 to spin';
+    }
+
+    const n = custom.truth.length + custom.dare.length;
+    $('customCount').textContent = n
+      ? `${custom.truth.length} custom truth${custom.truth.length === 1 ? '' : 's'}, ${custom.dare.length} custom dare${custom.dare.length === 1 ? '' : 's'} in the mix.`
+      : 'Custom prompts are mixed in with every level.';
+
+    const hist = $('history');
+    hist.innerHTML = '';
+    if (!history.length) {
+      const li = document.createElement('li');
+      li.textContent = 'Nothing yet.';
+      li.style.color = 'var(--muted)';
+      hist.append(li);
+    }
+    history.forEach((h) => {
+      const li = document.createElement('li');
+      const tag = document.createElement('span');
+      tag.className = `tag ${h.kind}`;
+      tag.textContent = h.kind === 'truth' ? 'T' : 'D';
+      const res = document.createElement('span');
+      res.className = h.outcome === 'done' ? 'ok' : 'no';
+      res.textContent = h.outcome === 'done' ? ' ✓' : ' ✗';
+      li.append(tag, document.createTextNode(`${h.who}: ${h.prompt}`), res);
+      hist.append(li);
+    });
+  }
+
+  function removePlayer(i) {
+    players.splice(i, 1);
+    if (i < turn) turn--;
+    if (turn >= players.length) turn = 0;
+    save();
+    render();
+  }
+
+  $('playerForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = $('playerName');
+    const name = input.value.trim().replace(/\s+/g, ' ');
+    if (!name) return;
+    players.push({ name, score: 0 });
+    input.value = '';
+    save();
+    render();
+  });
+
+  $('resetScores').addEventListener('click', () => {
+    players.forEach((p) => { p.score = 0; });
+    turn = 0;
+    save();
+    render();
+  });
+
+  $('clearHistory').addEventListener('click', () => {
+    history = [];
+    save();
+    render();
+  });
+
+  $('customForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = $('customText');
+    const text = input.value.trim();
+    if (!text) return;
+    custom[$('customKind').value].push(text);
+    input.value = '';
+    save();
+    render();
+  });
+
+  levelInputs.forEach((i) => i.addEventListener('change', save));
+
+  hub.addEventListener('click', spin);
+  spinBtn.addEventListener('click', spin);
+  pickTruthBtn.addEventListener('click', () => showResult('truth'));
+  pickDareBtn.addEventListener('click', () => showResult('dare'));
+
+  drawWheel();
+  render();
+})();
+</script>
+</body>
+</html>
