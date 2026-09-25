@@ -17,7 +17,7 @@ The first run adds 8 placeholder avatars so there's something to vote on.
 Open `public/67.html` in a browser (or `http://localhost:3000/67.html` with `npm start`).
 
 - Tap the big **67** in the middle of the wheel to spin. It lands on Truth or Dare and shows something to do.
-- Add friends' names under **Who's playing?** and it tells you whose turn it is.
+- Add friends' names under **Who's playing?**. Every spin shuffles the names and picks someone at random, and everyone gets a go before anyone goes twice.
 - Tap **Done!** for confetti and the next player, or **Another one** for a different question.
 
 ## How it works

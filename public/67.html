@@ -57,6 +57,12 @@
     margin-bottom: 20px;
     text-align: center;
   }
+  .turn.landed { animation: pop .45s cubic-bezier(.2,1.6,.4,1); }
+  @keyframes pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.18); }
+    100% { transform: scale(1); }
+  }
 
   .wheel-wrap {
     position: relative;
@@ -497,7 +503,8 @@
 
   let players = [];
   try { players = JSON.parse(localStorage.getItem('67-players')) || []; } catch {}
-  let turn = 0;
+  let turn = -1; // who the last spin picked; -1 means nobody yet
+  let playerDeck = [];
   function savePlayers() {
     try { localStorage.setItem('67-players', JSON.stringify(players)); } catch {}
   }
@@ -555,11 +562,57 @@
     rotation += (5 + Math.floor(Math.random() * 3)) * 360 + ((target - now + 360) % 360);
     canvas.style.transform = `rotate(${rotation}deg)`;
 
+    const chosen = players.length ? nextPlayer() : -1;
+    if (players.length > 1) shufflePlayers();
+
     setTimeout(() => {
       spinning = false;
       hub.disabled = false;
+      turn = chosen;
+      render();
+      const pill = $('turn');
+      pill.classList.remove('landed');
+      void pill.offsetWidth; // restart the pop animation
+      pill.classList.add('landed');
       show(SLICES[index].kind);
     }, SPIN_MS + 100);
+  }
+
+  function shuffle(list) {
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+    return list;
+  }
+
+  // Players are dealt from a shuffled deck: random order, but everyone gets a
+  // go before anyone goes twice, and nobody goes twice in a row.
+  function nextPlayer() {
+    if (!playerDeck.length) {
+      playerDeck = shuffle(players.map((_, i) => i));
+      const last = playerDeck.length - 1;
+      if (playerDeck.length > 1 && playerDeck[last] === turn) {
+        [playerDeck[0], playerDeck[last]] = [playerDeck[last], playerDeck[0]];
+      }
+    }
+    return playerDeck.pop();
+  }
+
+  // Flick through the names while the wheel spins, slowing down like the wheel.
+  function shufflePlayers() {
+    const start = Date.now();
+    let shown = -1;
+    let delay = 70;
+    (function flick() {
+      if (Date.now() - start > SPIN_MS - 250) return;
+      let i;
+      do { i = Math.floor(Math.random() * players.length); } while (i === shown);
+      shown = i;
+      render(i, true);
+      delay *= 1.12;
+      setTimeout(flick, delay);
+    })();
   }
 
   // ---------- result ----------
@@ -568,12 +621,7 @@
   const decks = { truth: [], dare: [] };
   function pickPrompt() {
     if (!decks[kind].length) {
-      const deck = [...(kind === 'truth' ? TRUTHS : DARES)];
-      for (let i = deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [deck[i], deck[j]] = [deck[j], deck[i]];
-      }
-      decks[kind] = deck;
+      decks[kind] = shuffle([...(kind === 'truth' ? TRUTHS : DARES)]);
     }
     $('prompt').textContent = decks[kind].pop();
   }
@@ -583,7 +631,7 @@
     $('card').className = `card ${k}`;
     $('emoji').textContent = k === 'truth' ? '🤔' : '🔥';
     $('kind').textContent = k === 'truth' ? 'TRUTH!' : 'DARE!';
-    $('who').textContent = players.length ? `${players[turn]}, your turn!` : 'Your turn!';
+    $('who').textContent = turn >= 0 ? `${players[turn]}, your turn!` : 'Your turn!';
     pickPrompt();
     overlay.classList.add('open');
     $('done').focus();
@@ -592,8 +640,7 @@
   function done() {
     overlay.classList.remove('open');
     confetti();
-    if (players.length) turn = (turn + 1) % players.length;
-    render();
+    render(-1); // back to "Tap 67 to pick a player!"
     hub.focus();
   }
 
@@ -613,12 +660,12 @@
 
   // ---------- players ----------
   const chipColors = ['#ffd23f', '#3bc9ff', '#ff9f1c', '#3ddc97', '#ff5fa2', '#9b5de5'];
-  function render() {
+  function render(highlight = turn, shuffling = false) {
     const chips = $('chips');
     chips.innerHTML = '';
     players.forEach((name, i) => {
       const chip = document.createElement('span');
-      chip.className = 'chip' + (i === turn ? ' now' : '');
+      chip.className = 'chip' + (i === highlight ? ' now' : '');
       chip.style.background = chipColors[i % chipColors.length];
       chip.append(document.createTextNode(name));
       const x = document.createElement('button');
@@ -626,9 +673,11 @@
       x.textContent = '×';
       x.setAttribute('aria-label', `Remove ${name}`);
       x.addEventListener('click', () => {
+        if (spinning) return;
         players.splice(i, 1);
-        if (i < turn) turn--;
-        if (turn >= players.length) turn = 0;
+        playerDeck = [];
+        if (i === turn) turn = -1;
+        else if (i < turn) turn--;
         savePlayers();
         render();
       });
@@ -638,7 +687,9 @@
     $('none').hidden = players.length > 0;
 
     const t = $('turn');
-    t.textContent = players.length ? `${players[turn]}'s turn! 🎯` : 'Tap 67 to spin!';
+    if (shuffling) t.textContent = `🎲 ${players[highlight]}…`;
+    else if (highlight >= 0) t.textContent = `${players[highlight]}'s turn! 🎯`;
+    else t.textContent = players.length ? 'Tap 67 to pick a player! 🎲' : 'Tap 67 to spin!';
   }
 
   $('addForm').addEventListener('submit', (e) => {
@@ -646,6 +697,7 @@
     const name = $('name').value.trim();
     if (!name) return;
     players.push(name);
+    playerDeck = []; // deal the new player in straight away
     $('name').value = '';
     savePlayers();
     render();
