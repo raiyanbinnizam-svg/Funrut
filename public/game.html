@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Funrut Run</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
+  <style>
+    :root { --bg: #111318; --panel: #1c2028; --ink: #e8e4da; --accent: #3fb7c4; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+      font-family: ui-monospace, Menlo, Consolas, monospace; overflow: hidden;
+      touch-action: none; user-select: none; -webkit-user-select: none; }
+    .wrap { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
+    canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block;
+      border: 4px solid #000; box-shadow: 0 0 0 4px var(--panel), 0 12px 40px #0008; background: #000; }
+    .pad { display: none; gap: 16px; }
+    .pad button { font: inherit; font-weight: 700; font-size: 18px; color: var(--ink); background: var(--panel);
+      border: 3px solid #000; box-shadow: inset 0 -4px 0 #0006; padding: 16px 28px; border-radius: 6px; }
+    .pad button:active { transform: translateY(2px); box-shadow: none; background: #0f3a40; }
+    @media (pointer: coarse) { .pad { display: flex; } }
+    .help { font-size: 12px; opacity: .6; text-align: center; }
+    .help a { color: var(--accent); }
+    @media (pointer: coarse) { .help .keys { display: none; } }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <canvas id="game" width="320" height="180" aria-label="Funrut Run game"></canvas>
+  <div class="pad">
+    <button id="btn-duck">▼ DUCK</button>
+    <button id="btn-jump">▲ JUMP</button>
+  </div>
+  <p class="help"><span class="keys">SPACE / ↑ jump · ↓ duck · P pause · </span><a href="/">← back to FaceSmash</a></p>
+</div>
+<script>
+(() => {
+  'use strict';
+  const W = 320, H = 180, GROUND = 150;
+  const cv = document.getElementById('game');
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  // ---------- sizing: biggest crisp scale that fits ----------
+  function fit() {
+    const padH = matchMedia('(pointer: coarse)').matches ? 110 : 60;
+    const s = Math.min((innerWidth - 40) / W, (innerHeight - padH) / H);
+    const scale = s >= 2 ? Math.floor(s) : Math.max(1, s);
+    cv.style.width = W * scale + 'px';
+    cv.style.height = H * scale + 'px';
+  }
+  addEventListener('resize', fit); fit();
+
+  // ---------- sprites ----------
+  function sprite(rows, pal) {
+    const w = Math.max(...rows.map(r => r.length)), h = rows.length;
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    rows.forEach((r, y) => [...r].forEach((ch, x) => {
+      if (pal[ch]) { g.fillStyle = pal[ch]; g.fillRect(x, y, 1, 1); }
+    }));
+    return c;
+  }
+
+  // The hero: short black hair, dark teal kurta with buttons — straight from the photo.
+  const HERO = {
+    K: '#141018', S: '#7a4a32', s: '#5a3424', E: '#120a0a', M: '#40201a', R: '#9a4a38',
+    T: '#0f3a40', t: '#0a2a2e', H: '#1b5a62', B: '#d8d0c0', P: '#1c2230', O: '#2a1a14',
+  };
+  const head = [
+    '.....KKKKKK.....',
+    '...KKKKKKKKKK...',
+    '..KKKKKKKKKKKK..',
+    '..KKKKKKKKKKKKK.',
+    '..KKKKKSSSSSSKK.',
+    '..KKKKSSSSSSSSK.',
+    '..KKRSSSSESSESS.',
+    '..KKRRSSSSSSSSS.',
+    '...KSSSSSSSSsSS.',
+    '....sSSSSSMMSS..',
+    '.....sSSSSSSS...',
+    '......sSSSs.....',
+  ];
+  const body = [
+    '....TTTTTTTTT...',
+    '...TTTTTTBTTTT..',
+    '..TTHTTTTTTTTTT.',
+    '..THTTTTTBTTTtT.',
+    '..THTTTTTTTTTtT.',
+    '..THTTTTTBTTTtT.',
+    '..SSTTTTTTTTTSS.',
+    '....TTTTTTTTT...',
+    '....tTTTTTTTt...',
+  ];
+  const legs = {
+    stand: ['.....PP..PP.....', '.....PP..PP.....', '....OOO..OOO....'],
+    run1:  ['....PP....PP....', '...PP......PP...', '..OOO.......OOO.'],
+    run2:  ['......PPPP......', '......PP.PP.....', '.....OOO.OOO....'],
+    jump:  ['....PP...PP.....', '...PP.....PP....', '...OO......OO...'],
+  };
+  const heroFrames = {};
+  for (const k in legs) heroFrames[k] = sprite([...head, ...body, ...legs[k]], HERO);
+  heroFrames.duck = sprite([...head,
+    '...TTTTTTBTTTT..',
+    '..THTTTTTTTTTSS.',
+    '..THTTTTTBTTTt..',
+    '...tTTTTTTTTt...',
+    '...PPPPP.PPPP...',
+    '..OOOO...OOOO...',
+  ], HERO);
+  heroFrames.hurt = sprite([...head.map(r => r.replace(/E/g, 'M')), ...body, ...legs.stand], HERO);
+
+  const cushion = sprite([
+    '..BBBBBBBBBBBB..',
+    '.BllllllllllbbB.',
+    'BblbbbbbbbbbbbbB',
+    'BbbbbbbbbbbbbbbB',
+    'BbbbbbbbbbbbbbbB',
+    'BbbbbbbbbbbbbbbB',
+    'BBbbbbbbbbbbbbBB',
+    '.BBBBBBBBBBBBBB.',
+    '..BBBBBBBBBBBB..',
+  ], { B: '#1a2566', b: '#2c3f9a', l: '#5068c8' });
+
+  const speaker = sprite([
+    'DDDDDDDDDDDD',
+    'DddddddddllD',
+    'DddggggggdlD',
+    'DdgGGGGGGgdD',
+    'DdgGDDDDGgdD',
+    'DdgGDDDDGgdD',
+    'DdgGGGGGGgdD',
+    'DddggggggddD',
+    'DddddddddddD',
+    'DdddggggdddD',
+    'DddgGDDGgddD',
+    'DddgGDDGgddD',
+    'DdddggggdddD',
+    'DddddddddddD',
+    'DDDDDDDDDDDD',
+    '.DD......DD.',
+  ], { D: '#0c0c10', d: '#1e1e24', g: '#34343c', G: '#50505c', l: '#44444e' });
+
+  const bulb = sprite([
+    '..yyy..',
+    '.yYYYy.',
+    'yYWYYYy',
+    'yYWYYYy',
+    'yYYYYYy',
+    '.yYYYy.',
+    '..yYy..',
+    '..ccc..',
+    '..CCC..',
+    '...c...',
+  ], { y: '#d8a020', Y: '#ffe070', W: '#fffbe0', c: '#a0a0a8', C: '#6a6a72' });
+
+  const heart = sprite([
+    '.RR.RR.',
+    'RWRRRRR',
+    'RRRRRRR',
+    '.RRRRR.',
+    '..RRR..',
+    '...R...',
+  ], { R: '#e0404a', W: '#ffb0b0' });
+  const heartEmpty = sprite([
+    '.RR.RR.',
+    'RRRRRRR',
+    'RRRRRRR',
+    '.RRRRR.',
+    '..RRR..',
+    '...R...',
+  ], { R: '#4a4a52' });
+
+  // ---------- tiny 3x5 pixel font ----------
+  const FONT = {
+    A:'010101111101101',B:'110101110101110',C:'011100100100011',D:'110101101101110',E:'111100110100111',
+    F:'111100110100100',G:'011100101101011',H:'101101111101101',I:'111010010010111',J:'001001001101010',
+    K:'101101110101101',L:'100100100100111',M:'101111111101101',N:'110101101101101',O:'010101101101010',
+    P:'110101110100100',Q:'010101101110011',R:'110101110101101',S:'011100010001110',T:'111010010010010',
+    U:'101101101101111',V:'101101101101010',W:'101101111111101',X:'101101010101101',Y:'101101010010010',
+    Z:'111001010100111','0':'111101101101111','1':'010110010010111','2':'110001010100111','3':'110001010001110',
+    '4':'101101111001001','5':'111100110001110','6':'011100111101111','7':'111001010010010','8':'111101111101111',
+    '9':'111101111001110',':':'000010000010000','!':'010010010000010','-':'000000111000000','.':'000000000000010',
+    '/':'001001010100100',"'":'010010000000000',
+  };
+  function textWidth(str, s = 1) { return str.length * 4 * s - s; }
+  function text(str, x, y, color = '#fff', s = 1, shadow = '#000') {
+    str = String(str).toUpperCase();
+    if (x === 'center') x = Math.round((W - textWidth(str, s)) / 2);
+    const draw = (ox, oy, col) => {
+      ctx.fillStyle = col;
+      [...str].forEach((ch, i) => {
+        const g = FONT[ch]; if (!g) return;
+        for (let p = 0; p < 15; p++) if (g[p] === '1')
+          ctx.fillRect(ox + i * 4 * s + (p % 3) * s, oy + Math.floor(p / 3) * s, s, s);
+      });
+    };
+    if (shadow) { const o = s > 2 ? 2 : 1; draw(x + o, y + o, shadow); }
+    draw(x, y, color);
+  }
+
+  // ---------- sound (tiny WebAudio blips) ----------
+  let actx = null, muted = false;
+  function beep(freq, dur, type = 'square', vol = 0.06, slide = 0) {
+    if (muted) return;
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
+      o.type = type; o.frequency.setValueAtTime(freq, t);
+      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), t + dur);
+      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur);
+    } catch (e) { /* no audio, no problem */ }
+  }
+  const sfx = {
+    jump: () => beep(300, 0.15, 'square', 0.05, 400),
+    bulb: () => { beep(880, 0.08, 'square', 0.05); setTimeout(() => beep(1320, 0.12, 'square', 0.05), 70); },
+    hit: () => beep(200, 0.3, 'sawtooth', 0.08, -150),
+    over: () => { [400, 300, 200, 120].forEach((f, i) => setTimeout(() => beep(f, 0.2, 'triangle', 0.08), i * 160)); },
+  };
+
+  // ---------- storage (best effort) ----------
+  function loadBest() { try { return +localStorage.getItem('funrut-best') || 0; } catch (e) { return 0; } }
+  function saveBest(v) { try { localStorage.setItem('funrut-best', v); } catch (e) {} }
+
+  // ---------- game state ----------
+  let state = 'title', best = loadBest(), paused = false;
+  let hero, obstacles, bulbs, particles, speed, dist, score, lives, spawnIn, bulbIn, shake, t, flash, bulbsCollected, scroll = 0;
+
+  function reset() {
+    hero = { x: 40, y: GROUND, vy: 0, onGround: true, duck: false, hurt: 0, anim: 0 };
+    obstacles = []; bulbs = []; particles = [];
+    speed = 120; dist = 0; score = 0; lives = 3; spawnIn = 1.2; bulbIn = 0.6; shake = 0; flash = 0; bulbsCollected = 0;
+  }
+  reset(); t = 0;
+
+  const input = { jump: false, duck: false, jumpPressed: false };
+
+  function heroBox() {
+    const h = hero.duck && hero.onGround ? 16 : 22;
+    return { x: hero.x + 4, y: hero.y - h, w: 8, h };
+  }
+  function hit(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+
+  function burst(x, y, color, n = 8, spread = 60) {
+    for (let i = 0; i < n; i++) particles.push({
+      x, y, vx: (Math.random() - 0.5) * spread * 2, vy: -Math.random() * spread, life: 0.5 + Math.random() * 0.4, color,
+    });
+  }
+
+  function spawnObstacle() {
+    const r = Math.random();
+    const lvl = Math.min(1, dist / 4000);
+    if (r < 0.25 + lvl * 0.15 && dist > 600) {
+      obstacles.push({ kind: 'fan', x: W + 20, w: 28, angle: 0 });
+    } else if (r < 0.65) {
+      obstacles.push({ kind: 'cushion', x: W + 10, w: 16, h: 9 });
+    } else if (r < 0.9) {
+      obstacles.push({ kind: 'speaker', x: W + 10, w: 12, h: 16 });
+    } else {
+      obstacles.push({ kind: 'double', x: W + 10, w: 26, h: 9 });
+    }
+    // Gap scales with speed so there's always room to react.
+    spawnIn = (0.75 + Math.random() * 0.9) * (160 / speed) + 0.35;
+  }
+
+  function obstacleBox(o) {
+    if (o.kind === 'fan') return { x: o.x - 14, y: 0, w: 28, h: GROUND - 21 };
+    return { x: o.x + 1, y: GROUND - o.h + 1, w: o.w - 2, h: o.h - 1 };
+  }
+
+  function update(dt) {
+    t += dt;
+    if (state === 'title') scroll += 30 * dt;
+    if (state !== 'play' || paused) {
+      if (input.jumpPressed) {
+        if (state !== 'play') { reset(); state = 'play'; sfx.jump(); }
+        else paused = false;
+      }
+      input.jumpPressed = false;
+      return;
+    }
+
+    speed = Math.min(300, speed + dt * 4);
+    dist += speed * dt;
+    scroll += speed * dt;
+    score = Math.floor(dist / 10) + bulbsCollected * 25;
+
+    // hero physics
+    hero.duck = input.duck;
+    if (input.jumpPressed && hero.onGround) {
+      hero.vy = -300; hero.onGround = false; sfx.jump();
+      burst(hero.x + 8, GROUND, '#c8bca8', 5, 30);
+    }
+    input.jumpPressed = false;
+    if (!hero.onGround) {
+      const g = !input.jump && hero.vy < 0 ? 1900 : (input.duck ? 1800 : 900); // short hop / fast-fall
+      hero.vy += g * dt;
+      hero.y += hero.vy * dt;
+      if (hero.y >= GROUND) {
+        hero.y = GROUND; hero.vy = 0; hero.onGround = true;
+        burst(hero.x + 8, GROUND, '#c8bca8', 4, 25);
+      }
+    }
+    hero.anim += dt * speed / 12;
+    if (hero.hurt > 0) hero.hurt -= dt;
+
+    // spawn
+    spawnIn -= dt;
+    if (spawnIn <= 0) spawnObstacle();
+    bulbIn -= dt;
+    if (bulbIn <= 0) {
+      const high = Math.random() < 0.5;
+      bulbs.push({ x: W + 10, y: high ? 88 : 118, bob: Math.random() * 6 });
+      bulbIn = 1 + Math.random() * 1.6;
+    }
+
+    const box = heroBox();
+    for (const o of obstacles) {
+      o.x -= speed * dt;
+      if (o.kind === 'fan') o.angle += dt * 14;
+      if (hero.hurt <= 0 && hit(box, obstacleBox(o))) {
+        lives--; hero.hurt = 1.2; shake = 0.3; flash = 0.1; sfx.hit();
+        burst(hero.x + 8, hero.y - 12, '#e0404a', 12, 90);
+        if (lives <= 0) {
+          state = 'over'; sfx.over();
+          if (score > best) { best = score; saveBest(best); }
+        }
+      }
+    }
+    obstacles = obstacles.filter(o => o.x > -40);
+
+    for (const b of bulbs) {
+      b.x -= speed * dt;
+      if (!b.got && hit(box, { x: b.x, y: b.y, w: 7, h: 10 })) {
+        b.got = true; bulbsCollected++; sfx.bulb();
+        burst(b.x + 3, b.y + 4, '#ffe070', 10, 70);
+      }
+    }
+    bulbs = bulbs.filter(b => b.x > -10 && !b.got);
+
+    // Don't let a bulb sit inside a fan or on top of a block.
+    for (const b of bulbs) for (const o of obstacles)
+      if (hit({ x: b.x - 4, y: b.y, w: 15, h: 10 }, obstacleBox(o))) b.y = o.kind === 'fan' ? 138 : 88;
+
+    for (const p of particles) { p.vy += 300 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; }
+    particles = particles.filter(p => p.life > 0);
+    if (shake > 0) shake -= dt;
+    if (flash > 0) flash -= dt;
+  }
+
+  // ---------- drawing: the room from the photo ----------
+  function rect(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), w, h); }
+
+  function spinFan(cx, cy, angle, r, hub = '#e8e0c8') {
+    // three blades, drawn as chunky pixel lines
+    for (let k = 0; k < 3; k++) {
+      const a = angle + k * (Math.PI * 2 / 3);
+      for (let i = 4; i <= r; i++) {
+        const x = cx + Math.cos(a) * i, y = cy + Math.sin(a) * i * 0.35;
+        rect(x - 1, y - 1, 3, 2, i > r - 3 ? '#cfc6ae' : '#ddd4bc');
+      }
+    }
+    rect(cx - 4, cy - 2, 9, 5, hub);
+    rect(cx - 3, cy - 3, 7, 1, hub);
+    rect(cx - 1, cy - 1, 2, 2, '#8a8a90');
+  }
+
+  function glow(cx, cy, r, color, a) {
+    ctx.globalAlpha = a;
+    for (let i = r; i > 0; i -= 3) {
+      ctx.globalAlpha = a * (1 - i / r);
+      rect(cx - i, cy - i * 0.8, i * 2, i * 1.6, color);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawRoom(scroll) {
+    // ceiling + the white ledge
+    rect(0, 0, W, 28, '#f4f1ea');
+    rect(0, 28, W, 6, '#e4dfd3');
+    rect(0, 34, W, 1, '#cfc8b8');
+    rect(0, 35, W, GROUND - 35, '#ebe5d8');
+
+    const far = -(scroll * 0.3) % 320;
+    for (let k = 0; k < 2; k++) {
+      const ox = Math.round(far + k * 320);
+      // wall lamp, its cable, and the glow
+      glow(ox + 48, 70, 40, '#fffbe8', 0.9);
+      ctx.fillStyle = '#6a6a70';
+      for (let y = 36; y < GROUND; y += 1) {
+        const x = ox + 20 + Math.sin(y / 18) * 8 + (y - 36) * 0.35;
+        ctx.fillRect(Math.round(x), y, 1, 1);
+      }
+      rect(ox + 44, 66, 9, 7, '#fdfdf8'); rect(ox + 44, 72, 9, 1, '#d0ccc0');
+      // window with striped curtains
+      glow(ox + 200, 100, 46, '#fffef4', 0.8);
+      rect(ox + 176, 64, 48, 66, '#fffdf2');
+      rect(ox + 199, 64, 2, 66, '#f0ece0'); rect(ox + 176, 96, 48, 2, '#f0ece0');
+      rect(ox + 150, 60, 100, 2, '#9a9aa2');
+      for (let i = 0; i < 26; i += 2) {
+        rect(ox + 154 + i, 62, 2, 70, i % 4 ? '#a8adb6' : '#d4d8de');
+        rect(ox + 222 + i, 62, 2, 70, i % 4 ? '#a8adb6' : '#d4d8de');
+      }
+      // black cabinet
+      rect(ox + 268, 118, 40, 32, '#18181c'); rect(ox + 268, 118, 40, 2, '#34343a');
+      rect(ox + 272, 124, 32, 10, '#222228'); rect(ox + 272, 138, 32, 10, '#222228');
+      // the "W" art in the corner
+      text('W', ox + 6, 40, '#2a2a30', 2, null);
+    }
+
+    // decorative ceiling fans, spinning
+    const mid = -(scroll * 0.5) % 200;
+    for (let k = 0; k < 3; k++) {
+      const x = Math.round(mid + k * 200 + 100);
+      rect(x - 3, 0, 7, 3, '#e8e0c8');
+      rect(x, 3, 1, 5, '#b8b0a0');
+      spinFan(x, 10, t * 12 + k, 24);
+    }
+
+    // floor tiles
+    rect(0, GROUND, W, H - GROUND, '#d6ccba');
+    rect(0, GROUND, W, 2, '#b8ad98');
+    const near = -scroll % 24;
+    for (let x = near; x < W; x += 24) rect(x, GROUND + 2, 1, H - GROUND, '#c4b9a4');
+    rect(0, GROUND + 14, W, 1, '#c4b9a4');
+  }
+
+  function drawObstacle(o) {
+    const x = Math.round(o.x);
+    if (o.kind === 'cushion') ctx.drawImage(cushion, x, GROUND - 9);
+    else if (o.kind === 'speaker') ctx.drawImage(speaker, x, GROUND - 16);
+    else if (o.kind === 'double') { ctx.drawImage(cushion, x, GROUND - 9); ctx.drawImage(cushion, x + 10, GROUND - 9); }
+    else if (o.kind === 'fan') {
+      // a low-hanging fan on a long rod: duck under it!
+      const hubY = GROUND - 26;
+      rect(x - 3, 0, 7, 3, '#e8e0c8');
+      rect(x - 1, 3, 2, hubY - 5, '#9a948a');
+      spinFan(x, hubY, o.angle, 16, '#f0e8d0');
+      rect(x - 2, hubY + 3, 4, 2, '#c8c0a8');
+    }
+  }
+
+  function drawHero() {
+    if (hero.hurt > 0 && Math.floor(hero.hurt * 12) % 2) return;
+    let f;
+    if (state === 'over') f = heroFrames.hurt;
+    else if (!hero.onGround) f = heroFrames.jump;
+    else if (hero.duck) f = heroFrames.duck;
+    else if (state === 'play') f = Math.floor(hero.anim) % 2 ? heroFrames.run1 : heroFrames.run2;
+    else f = heroFrames.stand;
+    // soft shadow
+    ctx.globalAlpha = 0.18;
+    rect(hero.x + 3, GROUND - 1, 10, 2, '#000');
+    ctx.globalAlpha = 1;
+    ctx.drawImage(f, Math.round(hero.x), Math.round(hero.y - f.height));
+  }
+
+  function hud() {
+    for (let i = 0; i < 3; i++) ctx.drawImage(i < lives ? heart : heartEmpty, 6 + i * 9, 6);
+    ctx.drawImage(bulb, 36, 4);
+    text('X' + bulbsCollected, 45, 7, '#ffe070');
+    text(String(score).padStart(5, '0'), W - 26, 6, '#fff');
+    text('HI ' + String(best).padStart(5, '0'), W - 62, 14, '#bbb');
+  }
+
+  function draw() {
+    ctx.save();
+    if (shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * 6), Math.round((Math.random() - 0.5) * 4));
+    drawRoom(scroll);
+
+    for (const b of bulbs) {
+      const y = Math.round(b.y + Math.sin(t * 5 + b.bob) * 2);
+      glow(b.x + 3, y + 3, 10, '#fff2a0', 0.5 + Math.sin(t * 10) * 0.1);
+      ctx.drawImage(bulb, Math.round(b.x), y);
+    }
+    obstacles.forEach(drawObstacle);
+    if (state !== 'title') drawHero();
+    for (const p of particles) rect(p.x, p.y, 2, 2, p.color);
+    ctx.restore();
+
+    if (flash > 0) { ctx.globalAlpha = 0.5; rect(0, 0, W, H, '#fff'); ctx.globalAlpha = 1; }
+
+    if (state === 'title') {
+      ctx.globalAlpha = 0.55; rect(0, 0, W, H, '#0b1a1e'); ctx.globalAlpha = 1;
+      // big portrait of the hero
+      const big = heroFrames.stand;
+      ctx.drawImage(big, 28, 58, big.width * 3, big.height * 3);
+      text('FUNRUT', 110, 40, '#3fb7c4', 5, '#062024');
+      text('RUN', 110, 72, '#ffe070', 5, '#3a2a00');
+      text('JUMP THE CUSHIONS', 112, 108, '#fff');
+      text('DUCK UNDER THE FANS', 112, 117, '#fff');
+      text('GRAB THE LIGHT BULBS', 112, 126, '#ffe070');
+      if (Math.floor(t * 2) % 2) text('PRESS SPACE OR TAP', 112, 146, '#3fb7c4');
+      if (best) text('BEST ' + best, 112, 158, '#bbb');
+    } else {
+      hud();
+    }
+
+    if (paused && state === 'play') {
+      ctx.globalAlpha = 0.5; rect(0, 0, W, H, '#000'); ctx.globalAlpha = 1;
+      text('PAUSED', 'center', 70, '#fff', 3);
+      text('PRESS SPACE TO GO ON', 'center', 100, '#bbb');
+    }
+    if (state === 'over') {
+      ctx.globalAlpha = 0.6; rect(0, 0, W, H, '#1a0608'); ctx.globalAlpha = 1;
+      text('GAME OVER', 'center', 44, '#e0404a', 4, '#300');
+      text('SCORE ' + score, 'center', 80, '#fff', 2);
+      text('BULBS ' + bulbsCollected, 'center', 98, '#ffe070');
+      text(score >= best && score > 0 ? 'NEW BEST!' : 'BEST ' + best, 'center', 110, '#3fb7c4');
+      if (Math.floor(t * 2) % 2) text('PRESS SPACE OR TAP TO RETRY', 'center', 136, '#fff');
+    }
+  }
+
+  // ---------- loop (fixed timestep) ----------
+  let last = performance.now(), acc = 0;
+  const STEP = 1 / 60;
+  function frame(now) {
+    acc += Math.min(0.1, (now - last) / 1000); last = now;
+    while (acc >= STEP) { update(STEP); acc -= STEP; }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ---------- input ----------
+  function press() { input.jump = true; input.jumpPressed = true; }
+  function release() { input.jump = false; }
+  addEventListener('keydown', e => {
+    if (['Space', 'ArrowUp', 'KeyW'].includes(e.code)) { if (!e.repeat) press(); e.preventDefault(); }
+    if (['ArrowDown', 'KeyS'].includes(e.code)) { input.duck = true; e.preventDefault(); }
+    if (e.code === 'KeyP' && state === 'play') paused = !paused;
+    if (e.code === 'KeyM') muted = !muted;
+  });
+  addEventListener('keyup', e => {
+    if (['Space', 'ArrowUp', 'KeyW'].includes(e.code)) release();
+    if (['ArrowDown', 'KeyS'].includes(e.code)) input.duck = false;
+  });
+  addEventListener('blur', () => { if (state === 'play') paused = true; input.duck = false; release(); });
+
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); press(); });
+  cv.addEventListener('pointerup', release);
+  const bj = document.getElementById('btn-jump'), bd = document.getElementById('btn-duck');
+  bj.addEventListener('pointerdown', e => { e.preventDefault(); press(); });
+  bj.addEventListener('pointerup', release); bj.addEventListener('pointerleave', release);
+  bd.addEventListener('pointerdown', e => { e.preventDefault(); input.duck = true; if (state !== 'play') press(); });
+  const unduck = () => { input.duck = false; release(); };
+  bd.addEventListener('pointerup', unduck); bd.addEventListener('pointerleave', unduck);
+})();
+</script>
+</body>
+</html>

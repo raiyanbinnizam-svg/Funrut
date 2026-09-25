@@ -97,12 +97,12 @@ async function loadBoard() {
 }
 
 function show(view) {
-  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === view));
+  document.querySelectorAll('.tab[data-view]').forEach((t) => t.classList.toggle('active', t.dataset.view === view));
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${view}`));
   if (view === 'board') loadBoard().catch((err) => ($('#vote-count').textContent = err.message));
 }
 
-document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => show(t.dataset.view)));
+document.querySelectorAll('.tab[data-view]').forEach((t) => t.addEventListener('click', () => show(t.dataset.view)));
 $('#left').addEventListener('click', () => vote('left'));
 $('#right').addEventListener('click', () => vote('right'));
 document.addEventListener('keydown', (e) => {

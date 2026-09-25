@@ -42,6 +42,7 @@ nav { display: flex; gap: 6px; }
   background: none; border: 2px solid transparent; border-radius: 999px;
   padding: 6px 14px; font-weight: 700; cursor: pointer;
 }
+a.tab { color: inherit; text-decoration: none; font-size: 13.33px; }
 .tab:hover { border-color: var(--line); }
 .tab.active { background: var(--ink); color: var(--bg); }
 

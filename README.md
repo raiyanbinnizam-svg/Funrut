@@ -19,6 +19,15 @@ The first run adds 8 placeholder avatars so there's something to vote on.
 - **Rankings**: standard Elo (K = 32, start at 1200).
 - **Join**: anyone can upload *their own* photo (PNG/JPEG/WebP/GIF, max 2 MB). They must tick a consent box. Uploads are checked by their file bytes, not just the extension.
 
+## Funrut Run (pixel art game)
+
+Open `http://localhost:3000/game.html` (or open `public/game.html` directly in a browser). A pixel-art endless runner set in a room with ceiling fans, a wall lamp and striped curtains. The hero wears a dark teal kurta.
+
+- **Space / ↑ / tap**: jump (hold to jump higher)
+- **↓**: duck under low ceiling fans (in the air, it makes you fall faster)
+- **P**: pause · **M**: mute
+- Collect light bulbs for bonus points. You have 3 hearts.
+
 ## Files
 
 | File | What it does |
@@ -26,3 +35,4 @@ The first run adds 8 placeholder avatars so there's something to vote on.
 | `server.js` | HTTP server, JSON API, and file storage |
 | `elo.js` | Elo rating math |
 | `public/` | Frontend (plain HTML/CSS/JS) |
+| `public/game.html` | Funrut Run pixel art game (one file, no dependencies) |
