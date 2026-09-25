@@ -14,12 +14,11 @@ The first run adds 8 placeholder avatars so there's something to vote on.
 
 ## 67 · Truth or Dare
 
-Open `http://localhost:3000/67.html` (or just open `public/67.html` in a browser, no server needed).
+Open `public/67.html` in a browser (or `http://localhost:3000/67.html` with `npm start`).
 
-- Tap **67** in the middle of the wheel (or press Space) to spin. It lands on Truth or Dare and shows a random prompt.
-- **Players** take turns. Completing a truth gets +1, a dare +2, and chickening out costs 1. Esc closes a prompt without scoring.
-- **Mild / Spicy / Mixed** picks which prompts are used. **Add your own** puts custom truths and dares into the mix.
-- **Just Truth / Just Dare** skip the wheel. Players, scores, custom prompts and history are saved in the browser.
+- Tap the big **67** in the middle of the wheel to spin. It lands on Truth or Dare and shows something to do.
+- Add friends' names under **Who's playing?** and it tells you whose turn it is.
+- Tap **Done!** for confetti and the next player, or **Another one** for a different question.
 
 ## How it works
 
@@ -35,4 +34,4 @@ Open `http://localhost:3000/67.html` (or just open `public/67.html` in a browser
 | `server.js` | HTTP server, JSON API, and file storage |
 | `elo.js` | Elo rating math |
 | `public/` | Frontend (plain HTML/CSS/JS) |
-| `public/67.html` | The 67 Truth or Dare wheel (single self-contained page) |
+| `public/67.html` | The 67 Truth or Dare wheel (one simple page) |
